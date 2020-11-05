@@ -5,21 +5,20 @@ There are three types of Windows reboot events:
 2. Reboot pending
 3. Reboot required
 
-Associated status codes with these events are defined in is_reboot_needed.h:
+Status codes of these events are defined in `is_reboot_needed.h`:
 
 ```C
-static const int REBOOT_STATUS_CLEAN = 0;
-static const int REBOOT_STATUS_RENAME_PENDING = 1;
-static const int REBOOT_STATUS_REBOOT_PENDING = 2;
-static const int REBOOT_STATUS_REBOOT_REQUIRED = 3;
+#define REBOOT_STATUS_CLEAN            0UL
+#define REBOOT_STATUS_RENAME_PENDING   1UL
+#define REBOOT_STATUS_REBOOT_PENDING   2UL
+#define REBOOT_STATUS_REBOOT_REQUIRED  4UL
 ```
 
-This utility determines which event has occurred and returns it's associated return code. When ___rename pending___ is occured then will returns `REBOOT_STATUS_RENAME_PENDING` value.
-When ___reboot pending___ is occured then will returns `REBOOT_STATUS_REBOOT_PENDING` value. If ___reboot is required___ then will returns `REBOOT_STATUS_REBOOT_REQUIRED` value.
+Return code is a set of these flags.
 
-When system is not reboot needed this utility returns `REBOOT_STATUS_CLEAN` value.
+When system is not reboot needed this utility returns `REBOOT_STATUS_CLEAN` (zero value).
 
-All of these values are returned through the passed pointer to an `int` variable as the parameter of the `is_reboot_needed` function. The returned `boolean` value is the result of checking whether a reboot is required.
+Set of these flags returns through the passed pointer to an `int` variable as the parameter of the `is_reboot_needed` function. That returns `boolean` value is the result of check if reboot is required.
 
 ### Compile with GCC
 ```

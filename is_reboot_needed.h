@@ -34,11 +34,23 @@ SOFTWARE.
 #pragma comment(lib, "advapi32")
 #endif
 
-static const int REBOOT_STATUS_CLEAN = 0;
-static const int REBOOT_STATUS_RENAME_PENDING = 1;
-static const int REBOOT_STATUS_REBOOT_PENDING = 2;
-static const int REBOOT_STATUS_REBOOT_REQUIRED = 3;
+#define REBOOT_STATUS_CLEAN            0UL
+#define REBOOT_STATUS_RENAME_PENDING   1UL
+#define REBOOT_STATUS_REBOOT_PENDING   2UL
+#define REBOOT_STATUS_REBOOT_REQUIRED  4UL
 
-int is_reboot_needed(int* status);
+#ifndef MemAlloc
+#define MemAlloc(s) HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,(s))
+#endif
+
+#ifndef MemFree
+#define MemFree(p) if(p){HeapFree(GetProcessHeap(),0,(p));(p)=NULL;}
+#endif
+
+#undef _bitcheck
+#define _bitcheck(a,v) ((a)&(v))==(v)
+
+int __cdecl is_reboot_needed(int * status);
+int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files);
 
 #endif
