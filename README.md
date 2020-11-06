@@ -1,5 +1,7 @@
 # Checks if you need to restart Windows
 
+Version: 0.2.2b
+
 There are three types of Windows reboot events:
 1. Rename pending
 2. Reboot pending
