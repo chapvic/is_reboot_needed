@@ -27,6 +27,22 @@ SOFTWARE.
 #ifndef IS_REBOOT_NEEDED_H
 #define IS_REBOOT_NEEDED_H
 
+#ifdef UNICODE
+#ifndef _UNICODE
+#define _UNICODE
+#endif
+#endif // UNICODE
+
+#ifdef _UNICODE
+#ifndef UNICODE
+#define UNICODE
+#endif
+#endif // _UNICODE
+
+#if defined(UNICODE) && defined(_MBCS)
+#undef _MBCS
+#endif
+
 #include <tchar.h>
 #include <windows.h>
 
