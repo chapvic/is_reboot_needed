@@ -24,9 +24,6 @@ SOFTWARE.
 
 *****************************************************************************/
 
-#include <tchar.h>
-#include <windows.h>
-
 #ifdef _MSC_VER
 #pragma comment(lib, "advapi32")
 #endif

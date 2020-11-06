@@ -85,9 +85,10 @@ int main(int argc, char* argv[]) {
 	result = is_reboot_needed_ex(&status, &files);
 	if (!_q) {
 		if (_s) {
-			strcat(state, _bitcheck(status,REBOOT_STATUS_RENAME_PENDING) ? ", RENAME_PENDING" : NULL);
+			strcat(state, _bitcheck(status,REBOOT_STATUS_RENAME_PENDING) ? ", RENAME_PENDING" : "");
 			strcat(state, _bitcheck(status,REBOOT_STATUS_REBOOT_PENDING) ? ", REBOOT_PENDING" : "");
 			strcat(state, _bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED) ? ", REBOOT_REQUIRED" : "");
+			strcat(state, _bitcheck(status,REBOOT_STATUS_CLEAN) ? ", CLEAN" : "");
 			fprintf(stdout, "Is reboot needed : %s\n", result ? "yes" : "no");
 			fprintf(stdout, "Status           : %s\n", &state[2]);
 		}
