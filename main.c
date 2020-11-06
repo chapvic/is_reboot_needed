@@ -53,25 +53,41 @@ static void usage(char *cmd) {
 	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
 	fprintf(stdout, "Usage: %s [options]\n", basename(cmd));
 	fprintf(stdout, "    -h      this help\n");
-	fprintf(stdout, "    -a      combination of '-s' and '-f'\n");
+	fprintf(stdout, "    -a      combination of '-s' and '-fc'\n");
 	fprintf(stdout, "    -s      show reboot status information\n");
 	fprintf(stdout, "    -f      list rename pending files\n");
-	fprintf(stdout, "    -q      do not show messages (quiet mode)\n");
+	fprintf(stdout, "    -fc     show rename pending files count\n");
+	fprintf(stdout, "    -q      don't show any messages (quiet mode)\n");
 	exit(0);
+}
+
+int __cdecl pending_files(LPBYTE * _files, int _print) {
+	TCHAR *p, *pp;
+	int cnt = 0;
+	if (!_files) goto Exit;
+	p = (TCHAR *)*_files;
+	do {
+		pp = _tstrchr(p, 0);
+		if (_print) _tfprintf(stdout, _T("%03d: %s\n"), ++cnt, p+4);
+		else ++cnt;
+	} while(*(p = pp + 2));
+Exit:
+	return cnt;
 }
 
 int main(int argc, char* argv[]) {
 	LPBYTE files = NULL;
 	TCHAR *p, *pp;
 	int status = 0, result = 0, argn = 0, cnt = 0;
-	int _h = 0, _q = 0, _s = 0, _f = 0;
+	int _h = 0, _q = 0, _s = 0, _f = 0, _fc = 0;
 	char state[100] = {0};
 	if (argc > 1) {
 		while (++argn < argc) {
 			if (!_stricmp(argv[argn], "-h")) _h = 1;
-			else if (!_stricmp(argv[argn], "-a")) { _s = 1; _f = 1; }
+			else if (!_stricmp(argv[argn], "-a")) { _s = 1; _fc = 1; }
 			else if (!_stricmp(argv[argn], "-s")) _s = 1;
 			else if (!_stricmp(argv[argn], "-f")) _f = 1;
+			else if (!_stricmp(argv[argn], "-fc")) _fc = 1;
 			else if (!_stricmp(argv[argn], "-q")) _q = 1;
 			else _h = 1;
 		}
@@ -85,24 +101,29 @@ int main(int argc, char* argv[]) {
 	result = is_reboot_needed_ex(&status, &files);
 	if (!_q) {
 		if (_s) {
-			strcat(state, _bitcheck(status,REBOOT_STATUS_RENAME_PENDING) ? ", RENAME_PENDING" : "");
-			strcat(state, _bitcheck(status,REBOOT_STATUS_REBOOT_PENDING) ? ", REBOOT_PENDING" : "");
-			strcat(state, _bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED) ? ", REBOOT_REQUIRED" : "");
-			strcat(state, status == 0 ? ", CLEAN" : "");
+			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) strcat(state, ", RENAME_PENDING");
+			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) strcat(state, ", REBOOT_PENDING");
+			if (_bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED)) strcat(state, ", REBOOT_REQUIRED");
+			if (!status) strcat(state, ", CLEAN");
 			fprintf(stdout, "Is reboot needed : %s\n", result ? "yes" : "no");
 			fprintf(stdout, "Status           : %s\n", &state[2]);
 		}
-		if (_f) {
-			if (files) {
-				fputs("\nPending files:\n", stdout);
-				p = (TCHAR *)files;
-				do {
-					pp = _tstrchr(p, 0);
-					_tfprintf(stdout, _T("%03d: %s\n"), ++cnt, p+4);
-				} while(*(p = pp + 2));
-				MemFree(files);
-			} else {
-				fputs("\nNo rename pending files.\n", stdout);
+		if (state) {
+			if (_f || _fc) {
+				if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) {
+					fputs("Rename pending   : ", stdout);
+					if (files) {
+						fputs("found", stdout);
+						if (_fc) fprintf(stdout, " %d files", pending_files(&files, 0));
+						fputs("\n", stdout);
+						if (_f) pending_files(&files, 1);
+						MemFree(files);
+					} else {
+						fputs("not found\n", stdout);
+					}
+				} else {
+					fputs("No RENAME_PENDING status encountered!", stdout);
+				}
 			}
 		}
 	}
