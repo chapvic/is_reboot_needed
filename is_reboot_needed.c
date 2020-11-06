@@ -32,7 +32,9 @@ SOFTWARE.
 
 const TCHAR * __regkey_rename_pending = _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager");
 const TCHAR * __regkey_reboot_pending = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending");
+
 const TCHAR * __regkey_reboot_required = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired");
+const TCHAR * __regkey_sticky_updates = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\StickyUpdates");
 
 const TCHAR * __regparam_rename_pending = _T("PendingFileRenameOperations");
 

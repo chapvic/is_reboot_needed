@@ -30,16 +30,23 @@ SOFTWARE.
 #include "is_reboot_needed.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #undef _tfprintf
 #undef _tstrchr
+#undef _tstrcpy
+#undef _tstrcat
 
 #if defined(_UNICODE) || defined(UNICODE)
 #define _tfprintf fwprintf
 #define _tstrchr wcschr
+#define _tstrcpy wcscpy
+#define _tstrcat wcscat
 #else
 #define _tfprintf fprintf
 #define _tstrchr strchr
+#define _tstrcpy strcpy
+#define _tstrcat strcat
 #endif
 
 static char* basename(char* path) {
@@ -48,16 +55,23 @@ static char* basename(char* path) {
     return p;
 }
 
-static void usage(char *cmd) {
-	fprintf(stdout, "Check if reboot is needed, v0.2.1-beta\n");
+static void logo() {
+	fprintf(stdout, "Check if reboot is needed, version 0.2.2b\n");
 	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
+};
+
+static void usage(char *cmd) {
+	logo();
 	fprintf(stdout, "Usage: %s [options]\n", basename(cmd));
 	fprintf(stdout, "    -h      this help\n");
-	fprintf(stdout, "    -a      combination of '-s' and '-fc'\n");
-	fprintf(stdout, "    -s      show reboot status information\n");
-	fprintf(stdout, "    -f      list rename pending files\n");
-	fprintf(stdout, "    -fc     show rename pending files count\n");
+	fprintf(stdout, "    -a      combination of -s, -d, -f\n");
+	fprintf(stdout, "    -s      show status information (default)\n");
+	fprintf(stdout, "    -d      list driver updates\n");
+	fprintf(stdout, "    -f      list update pending files\n");
+	fprintf(stdout, "    -n      suppress logo\n");
 	fprintf(stdout, "    -q      don't show any messages (quiet mode)\n");
+
+	puts("175952f440b");
 	exit(0);
 }
 
@@ -68,31 +82,120 @@ int __cdecl pending_files(LPBYTE * _files, int _print) {
 	p = (TCHAR *)*_files;
 	do {
 		pp = _tstrchr(p, 0);
-		if (_print) _tfprintf(stdout, _T("%03d: %s\n"), ++cnt, p+4);
+		if (_print) _tfprintf(stdout, _T("  (%d) %s\n"), ++cnt, p+4);
 		else ++cnt;
 	} while(*(p = pp + 2));
 Exit:
 	return cnt;
 }
 
+#define MAX_KEY_LENGTH 255
+#define MAX_VALUE_NAME 16383
+
+void __cdecl check_drivers(HKEY hKey, int detailed) { 
+    TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
+    DWORD    cbName;                   // size of name string 
+    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+    DWORD    cchClassName = MAX_PATH;  // size of class string 
+    DWORD    cSubKeys=0;               // number of subkeys 
+    DWORD    cbMaxSubKey;              // longest subkey size 
+    DWORD    cchMaxClass;              // longest class string 
+    DWORD    cValues;              // number of values for key 
+    DWORD    cchMaxValue;          // longest value name 
+    DWORD    cbMaxValueData;       // longest value data 
+    DWORD    cbSecurityDescriptor; // size of security descriptor 
+    FILETIME ftLastWriteTime;      // last write time 
+ 
+    DWORD i, retCode; 
+ 
+    TCHAR  achValue[MAX_VALUE_NAME]; 
+    DWORD cchValue = MAX_VALUE_NAME; 
+ 
+    // Get the class name and the value count. 
+    retCode = RegQueryInfoKey(
+        hKey,                    // key handle 
+        achClass,                // buffer for class name 
+        &cchClassName,           // size of class string 
+        NULL,                    // reserved 
+        &cSubKeys,               // number of subkeys 
+        &cbMaxSubKey,            // longest subkey size 
+        &cchMaxClass,            // longest class string 
+        &cValues,                // number of values for this key 
+        &cchMaxValue,            // longest value name 
+        &cbMaxValueData,         // longest value data 
+        &cbSecurityDescriptor,   // security descriptor 
+        &ftLastWriteTime);       // last write time
+
+    if (cValues) {
+	// Get registry timestamp
+	SYSTEMTIME st;
+	FileTimeToSystemTime(&ftLastWriteTime, &st);
+        fprintf(stdout, "Last update time : %02d.%02d.%04d %02d:%02d:%02d\n",
+		st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
+	// Display updates count
+        fprintf(stdout, "Driver updates   : %d\n", cValues);
+	
+	if (!detailed) return;
+        for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) { 
+            cchValue = MAX_VALUE_NAME; 
+            achValue[0] = '\0'; 
+            retCode = RegEnumValue(hKey, i, achValue, &cchValue, NULL, NULL, NULL, NULL);
+            if (retCode == ERROR_SUCCESS) { 
+                _tprintf(TEXT("  (%d) "), i+1);
+
+		HKEY drvKey, clsKey;
+		_tstrcpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Enum\\"));
+		_tstrcat(achKey, achValue);
+		if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &drvKey))) {
+			achValue[0] = '\0';
+			cchValue = MAX_VALUE_NAME;
+			if (SUCCEEDED(RegQueryValueEx(drvKey, TEXT("Driver"), NULL, NULL, (LPBYTE)&achValue, &cchValue)) && achValue[0]) {
+				// Load driver information
+				_tstrcpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Control\\Class\\"));
+				_tstrcat(achKey, achValue);
+				if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &clsKey))) {
+					// Get provider name
+					achValue[0] = '\0';
+					cchValue = MAX_VALUE_NAME;
+					RegQueryValueEx(clsKey, TEXT("ProviderName"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_tfprintf(stdout, TEXT(" %s"), achValue);
+					// Get driver decription
+					achValue[0] = '\0';
+					cchValue = MAX_VALUE_NAME;
+					RegQueryValueEx(clsKey, TEXT("DriverDesc"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_tfprintf(stdout, TEXT(" - %s"), achValue);
+					// Get driver version
+					achValue[0] = '\0';
+					cchValue = MAX_VALUE_NAME;
+					RegQueryValueEx(clsKey, TEXT("DriverVersion"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_tfprintf(stdout, TEXT(" - %s\n"), achValue);
+				}
+			}
+			RegCloseKey(drvKey);
+			_tfprintf(stdout, TEXT("---\n"));
+		}
+            } 
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
 	LPBYTE files = NULL;
 	TCHAR *p, *pp;
 	int status = 0, result = 0, argn = 0, cnt = 0;
-	int _h = 0, _q = 0, _s = 0, _f = 0, _fc = 0;
+	int _h = 0, _a = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0;
 	char state[100] = {0};
 	if (argc > 1) {
 		while (++argn < argc) {
 			if (!_stricmp(argv[argn], "-h")) _h = 1;
-			else if (!_stricmp(argv[argn], "-a")) { _s = 1; _fc = 1; }
+			else if (!_stricmp(argv[argn], "-a")) { _s = 1; _d = 1, _f = 1; }
 			else if (!_stricmp(argv[argn], "-s")) _s = 1;
+			else if (!_stricmp(argv[argn], "-d")) _d = 1;
 			else if (!_stricmp(argv[argn], "-f")) _f = 1;
-			else if (!_stricmp(argv[argn], "-fc")) _fc = 1;
+			else if (!_stricmp(argv[argn], "-n")) _n = 1;
 			else if (!_stricmp(argv[argn], "-q")) _q = 1;
 			else _h = 1;
 		}
-	} else {
-		_h = 1;
 	}
 	if (_h) {
 		usage(argv[0]);
@@ -100,6 +203,7 @@ int main(int argc, char* argv[]) {
 	}
 	result = is_reboot_needed_ex(&status, &files);
 	if (!_q) {
+		if (!_n) logo();
 		if (_s) {
 			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) strcat(state, ", RENAME_PENDING");
 			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) strcat(state, ", REBOOT_PENDING");
@@ -107,23 +211,20 @@ int main(int argc, char* argv[]) {
 			if (!status) strcat(state, ", CLEAN");
 			fprintf(stdout, "Is reboot needed : %s\n", result ? "yes" : "no");
 			fprintf(stdout, "Status           : %s\n", &state[2]);
+
+			HKEY hKey;
+			if (SUCCEEDED(RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("System\\CurrentControlSet\\Control\\NotifyDeviceReboot"), 0, KEY_READ, &hKey))) {
+				check_drivers(hKey, _d);
+				RegCloseKey(hKey);
+			}
 		}
 		if (state) {
-			if (_f || _fc) {
-				if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) {
-					fputs("Rename pending   : ", stdout);
-					if (files) {
-						fputs("found", stdout);
-						if (_fc) fprintf(stdout, " %d files", pending_files(&files, 0));
-						fputs("\n", stdout);
-						if (_f) pending_files(&files, 1);
-						MemFree(files);
-					} else {
-						fputs("not found\n", stdout);
-					}
-				} else {
-					fputs("No RENAME_PENDING status encountered!", stdout);
+			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) {
+				fprintf(stdout, "Pending files    : %d\n", pending_files(&files, 0));
+				if (_f) {
+					pending_files(&files, 1);
 				}
+				MemFree(files);
 			}
 		}
 	}
