@@ -30,20 +30,38 @@ SOFTWARE.
 
 #include "is_reboot_needed.h"
 
-const TCHAR * __regkey_rename_pending = _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager");
-const TCHAR * __regkey_reboot_pending = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending");
-
+// Reboot required
+const TCHAR * __regkey_reboot_in_progress = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootInProgress");
 const TCHAR * __regkey_reboot_required = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired");
-const TCHAR * __regkey_sticky_updates = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\StickyUpdates");
+const TCHAR * __regkey_reboot_attempts = _T("SOFTWARE\\Microsoft\\ServerManager\\CurrentRebootAttempts");
 
+const TCHAR * __regkey_reboot_netlogon = _T("SYSTEM\\CurrentControlSet\\Services\\Netlogon");
+const TCHAR * __regparam_reboot_netlogon1 = _T("JoinDomain");
+const TCHAR * __regparam_reboot_netlogon2 = _T("AvoidSpnSet");
+
+// !!!
+// HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName &&
+// HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName is different
+
+// Reboot pending
+const TCHAR * __regkey_reboot_pending = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending");
+const TCHAR * __regkey_reboot_packages_pending = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\PackagesPending");
+
+// Rename pending
+const TCHAR * __regkey_rename_pending = _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager");
 const TCHAR * __regparam_rename_pending = _T("PendingFileRenameOperations");
+const TCHAR * __regparam_rename_pending2 = _T("PendingFileRenameOperations2");
+
+const TCHAR * __regkey_dvd_reboot_signal = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce");
+const TCHAR * __regparam_dvd_reboot_signal = _T("DVDRebootSignal");
 
 #if defined(_WIN64) || defined(WIN64) || defined(__x86_64__)
 #define is_win64() TRUE
 #else
 typedef BOOL(WINAPI *fn_IsWow64Process)(HANDLE, PBOOL);
 
-static int is_win64() {
+__declspec(noinline)
+static int __cdecl is_win64() {
 	fn_IsWow64Process isWow64Process;
 	int result;
 	HMODULE hModule = GetModuleHandle(_T("kernel32.dll"));
@@ -55,7 +73,8 @@ static int is_win64() {
 }
 #endif
 
-static int check_reg_key(const TCHAR * key) {
+__declspec(noinline)
+static int __cdecl check_reg_key(const TCHAR * key) {
 	HKEY hKey = NULL;
 	RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_READ | (is_win64() ? KEY_WOW64_64KEY : 0), &hKey);
 	if (hKey) {
@@ -65,12 +84,13 @@ static int check_reg_key(const TCHAR * key) {
 	return FALSE;
 }
 
-static int check_reg_param(const TCHAR * key, const TCHAR * param, LPBYTE * value) {
+__declspec(noinline)
+static int __cdecl check_reg_param(const TCHAR * key, const TCHAR * param, LPBYTE * value) {
 	HKEY hKey = NULL;
 	DWORD dwType = 0;
 	RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &hKey);
 	if (hKey) {
-		DWORD dwSize;
+		DWORD dwSize = 0;
 		if(SUCCEEDED(RegQueryValueEx(hKey, param, NULL, &dwType, NULL, &dwSize))) {
 			if(value && dwSize) {
 				*value = MemAlloc(dwSize);
@@ -82,15 +102,34 @@ static int check_reg_param(const TCHAR * key, const TCHAR * param, LPBYTE * valu
 	return (dwType == REG_MULTI_SZ);
 }
 
+__declspec(noinline)
 int __cdecl is_reboot_needed(int * status) {
 	return is_reboot_needed_ex(status, NULL);
 }
 
+__declspec(noinline)
 int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files) {
 	int i, *dummy = status ? status : &i;
 	*dummy = REBOOT_STATUS_CLEAN;
-	if (check_reg_key(__regkey_reboot_required)) *dummy += REBOOT_STATUS_REBOOT_REQUIRED;
-	if (check_reg_key(__regkey_reboot_pending)) *dummy += REBOOT_STATUS_REBOOT_PENDING;
-	if (check_reg_param(__regkey_rename_pending, __regparam_rename_pending, files)) *dummy += REBOOT_STATUS_RENAME_PENDING;
-	return *dummy > REBOOT_STATUS_CLEAN;
+
+	if (
+		check_reg_key(__regkey_reboot_required) ||
+		check_reg_key(__regkey_reboot_attempts) ||
+		check_reg_key(__regkey_reboot_in_progress) ||
+		check_reg_param(__regkey_reboot_netlogon, __regparam_reboot_netlogon1, NULL) ||
+		check_reg_param(__regkey_reboot_netlogon, __regparam_reboot_netlogon2, NULL)
+	) *dummy |= REBOOT_STATUS_REBOOT_REQUIRED;
+
+	if (
+		check_reg_key(__regkey_reboot_pending) ||
+		check_reg_key(__regkey_reboot_packages_pending) ||
+		check_reg_param(__regkey_dvd_reboot_signal, __regparam_dvd_reboot_signal, NULL)
+	) *dummy |= REBOOT_STATUS_REBOOT_PENDING;
+
+	if (
+		check_reg_param(__regkey_rename_pending, __regparam_rename_pending, files) ||
+		check_reg_param(__regkey_rename_pending, __regparam_rename_pending2, NULL)
+	) *dummy |= REBOOT_STATUS_RENAME_PENDING;
+
+	return *dummy > REBOOT_STATUS_RENAME_PENDING;
 }

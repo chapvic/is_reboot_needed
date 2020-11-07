@@ -33,34 +33,26 @@ SOFTWARE.
 #include <time.h>
 
 #undef _tfprintf
-#undef _tstrchr
-#undef _tstrcpy
-#undef _tstrcat
 
 #if defined(_UNICODE) || defined(UNICODE)
 #define _tfprintf fwprintf
-#define _tstrchr wcschr
-#define _tstrcpy wcscpy
-#define _tstrcat wcscat
 #else
 #define _tfprintf fprintf
-#define _tstrchr strchr
-#define _tstrcpy strcpy
-#define _tstrcat strcat
 #endif
 
-static char* basename(char* path) {
+static char * __cdecl basename(char * path) {
     char* p = strchr(path, 0);
     while (p > path && !(p[-1] == '/' || p[-1] == '\\')) p--;
     return p;
 }
 
-static void logo() {
-	fprintf(stdout, "Check if reboot is needed, version 0.2.2b\n");
+static void __cdecl logo(void) {
+	fprintf(stdout, "Check if reboot is needed, version 0.2.3b\n");
 	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
 };
 
-static void usage(char *cmd) {
+__declspec(noinline)
+static void __cdecl usage(char *cmd) {
 	logo();
 	fprintf(stdout, "Usage: %s [options]\n", basename(cmd));
 	fprintf(stdout, "    -h      this help\n");
@@ -75,13 +67,14 @@ static void usage(char *cmd) {
 	exit(0);
 }
 
+__declspec(noinline)
 int __cdecl pending_files(LPBYTE * _files, int _print) {
 	TCHAR *p, *pp;
 	int cnt = 0;
 	if (!_files) goto Exit;
 	p = (TCHAR *)*_files;
 	do {
-		pp = _tstrchr(p, 0);
+		pp = _tcschr(p, 0);
 		if (_print) _tfprintf(stdout, _T("  (%d) %s\n"), ++cnt, p+4);
 		else ++cnt;
 	} while(*(p = pp + 2));
@@ -92,39 +85,45 @@ Exit:
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME 16383
 
-void __cdecl check_drivers(HKEY hKey, int detailed) { 
-    TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
-    DWORD    cbName;                   // size of name string 
-    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
-    DWORD    cchClassName = MAX_PATH;  // size of class string 
-    DWORD    cSubKeys=0;               // number of subkeys 
-    DWORD    cbMaxSubKey;              // longest subkey size 
-    DWORD    cchMaxClass;              // longest class string 
-    DWORD    cValues;              // number of values for key 
-    DWORD    cchMaxValue;          // longest value name 
-    DWORD    cbMaxValueData;       // longest value data 
-    DWORD    cbSecurityDescriptor; // size of security descriptor 
-    FILETIME ftLastWriteTime;      // last write time 
+int __cdecl check_drivers(HKEY hKey, int detailed) { 
+	int retval = 0;
+	TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
+//	DWORD    cbName;                   // size of name string 
+	TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+	DWORD    cchClassName = MAX_PATH;  // size of class string 
+	DWORD    cSubKeys=0;               // number of subkeys 
+	DWORD    cbMaxSubKey;              // longest subkey size 
+	DWORD    cchMaxClass;              // longest class string 
+	DWORD    cValues;              // number of values for key 
+	DWORD    cchMaxValue;          // longest value name 
+	DWORD    cbMaxValueData;       // longest value data 
+	DWORD    cbSecurityDescriptor; // size of security descriptor 
+	FILETIME ftLastWriteTime;      // last write time 
  
-    DWORD i, retCode; 
+	DWORD i, retCode; 
  
-    TCHAR  achValue[MAX_VALUE_NAME]; 
-    DWORD cchValue = MAX_VALUE_NAME; 
+	TCHAR  achValue[MAX_VALUE_NAME]; 
+	DWORD cchValue = MAX_VALUE_NAME; 
  
-    // Get the class name and the value count. 
-    retCode = RegQueryInfoKey(
-        hKey,                    // key handle 
-        achClass,                // buffer for class name 
-        &cchClassName,           // size of class string 
-        NULL,                    // reserved 
-        &cSubKeys,               // number of subkeys 
-        &cbMaxSubKey,            // longest subkey size 
-        &cchMaxClass,            // longest class string 
-        &cValues,                // number of values for this key 
-        &cchMaxValue,            // longest value name 
-        &cbMaxValueData,         // longest value data 
-        &cbSecurityDescriptor,   // security descriptor 
-        &ftLastWriteTime);       // last write time
+	// Get the class name and the value count. 
+	retCode = RegQueryInfoKey(
+		hKey,                    // key handle 
+		achClass,                // buffer for class name 
+		&cchClassName,           // size of class string 
+		NULL,                    // reserved 
+		&cSubKeys,               // number of subkeys 
+		&cbMaxSubKey,            // longest subkey size 
+		&cchMaxClass,            // longest class string 
+		&cValues,                // number of values for this key 
+		&cchMaxValue,            // longest value name 
+		&cbMaxValueData,         // longest value data 
+		&cbSecurityDescriptor,   // security descriptor 
+		&ftLastWriteTime);       // last write time
+
+	retval = cValues;
+
+	// Display updates count
+        fprintf(stdout, "Driver updates   : %ld\n", cValues);
 
     if (cValues) {
 	// Get registry timestamp
@@ -132,27 +131,25 @@ void __cdecl check_drivers(HKEY hKey, int detailed) {
 	FileTimeToSystemTime(&ftLastWriteTime, &st);
         fprintf(stdout, "Last update time : %02d.%02d.%04d %02d:%02d:%02d\n",
 		st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
-	// Display updates count
-        fprintf(stdout, "Driver updates   : %d\n", cValues);
 	
-	if (!detailed) return;
+	if (!detailed) return retval;
         for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) { 
             cchValue = MAX_VALUE_NAME; 
             achValue[0] = '\0'; 
             retCode = RegEnumValue(hKey, i, achValue, &cchValue, NULL, NULL, NULL, NULL);
             if (retCode == ERROR_SUCCESS) { 
-                _tprintf(TEXT("  (%d) "), i+1);
+                _tprintf(TEXT("  (%ld) "), i+1);
 
 		HKEY drvKey, clsKey;
-		_tstrcpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Enum\\"));
-		_tstrcat(achKey, achValue);
+		_tcscpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Enum\\"));
+		_tcscat(achKey, achValue);
 		if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &drvKey))) {
 			achValue[0] = '\0';
 			cchValue = MAX_VALUE_NAME;
 			if (SUCCEEDED(RegQueryValueEx(drvKey, TEXT("Driver"), NULL, NULL, (LPBYTE)&achValue, &cchValue)) && achValue[0]) {
 				// Load driver information
-				_tstrcpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Control\\Class\\"));
-				_tstrcat(achKey, achValue);
+				_tcscpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Control\\Class\\"));
+				_tcscat(achKey, achValue);
 				if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &clsKey))) {
 					// Get provider name
 					achValue[0] = '\0';
@@ -177,13 +174,13 @@ void __cdecl check_drivers(HKEY hKey, int detailed) {
             } 
         }
     }
+	return retval;
 }
 
 int main(int argc, char* argv[]) {
 	LPBYTE files = NULL;
-	TCHAR *p, *pp;
-	int status = 0, result = 0, argn = 0, cnt = 0;
-	int _h = 0, _a = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0;
+	int status = 0, argn = 0;
+	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0;
 	char state[100] = {0};
 	if (argc > 1) {
 		while (++argn < argc) {
@@ -201,7 +198,7 @@ int main(int argc, char* argv[]) {
 		usage(argv[0]);
 		goto Exit;
 	}
-	result = is_reboot_needed_ex(&status, &files);
+	status = is_reboot_needed_ex(&status, &files);
 	if (!_q) {
 		if (!_n) logo();
 		if (_s) {
@@ -209,16 +206,20 @@ int main(int argc, char* argv[]) {
 			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) strcat(state, ", REBOOT_PENDING");
 			if (_bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED)) strcat(state, ", REBOOT_REQUIRED");
 			if (!status) strcat(state, ", CLEAN");
-			fprintf(stdout, "Is reboot needed : %s\n", result ? "yes" : "no");
+			fprintf(stdout, "Is reboot needed : %s\n", 
+				(status > REBOOT_STATUS_RENAME_PENDING) ? "yes" :
+				(status > 0) ? "optional" : "no");
 			fprintf(stdout, "Status           : %s\n", &state[2]);
 
-			HKEY hKey;
-			if (SUCCEEDED(RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("System\\CurrentControlSet\\Control\\NotifyDeviceReboot"), 0, KEY_READ, &hKey))) {
-				check_drivers(hKey, _d);
-				RegCloseKey(hKey);
+			if (status > REBOOT_STATUS_RENAME_PENDING) {
+				HKEY hKey;
+				if (SUCCEEDED(RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("System\\CurrentControlSet\\Control\\NotifyDeviceReboot"), 0, KEY_READ, &hKey))) {
+					check_drivers(hKey, _d);
+					RegCloseKey(hKey);
+				}
 			}
 		}
-		if (state) {
+		if (status) {
 			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) {
 				fprintf(stdout, "Pending files    : %d\n", pending_files(&files, 0));
 				if (_f) {

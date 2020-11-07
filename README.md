@@ -1,11 +1,11 @@
 # Checks if you need to restart Windows
 
-Version: 0.2.2b
+Version: 0.2.3b
 
-There are three types of Windows reboot events:
-1. Rename pending
-2. Reboot pending
-3. Reboot required
+This utility returns a set of reboot event codes:
+- Rename pending (1)
+- Reboot pending (2)
+- Reboot required (4)
 
 Status codes of these events are defined in `is_reboot_needed.h`:
 
@@ -15,8 +15,6 @@ Status codes of these events are defined in `is_reboot_needed.h`:
 #define REBOOT_STATUS_REBOOT_PENDING   2UL
 #define REBOOT_STATUS_REBOOT_REQUIRED  4UL
 ```
-
-Return code is a set of these flags.
 
 When system is not reboot needed this utility returns `REBOOT_STATUS_CLEAN` (zero value).
 

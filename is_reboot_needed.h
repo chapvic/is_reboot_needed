@@ -43,6 +43,12 @@ SOFTWARE.
 #undef _MBCS
 #endif
 
+#ifndef __GNUC__
+#pragma warning(disable: 4668)
+#pragma warning(disable: 4710)
+#pragma warning(disable: 5045)
+#endif
+
 #include <tchar.h>
 #include <windows.h>
 
