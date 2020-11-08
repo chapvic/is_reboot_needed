@@ -62,8 +62,6 @@ static void __cdecl usage(char *cmd) {
 	fprintf(stdout, "    -f      list update pending files\n");
 	fprintf(stdout, "    -n      suppress logo\n");
 	fprintf(stdout, "    -q      don't show any messages (quiet mode)\n");
-
-	puts("175952f440b");
 	exit(0);
 }
 
