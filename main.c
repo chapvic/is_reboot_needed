@@ -47,7 +47,7 @@ static char * __cdecl basename(char * path) {
 }
 
 static void __cdecl logo(void) {
-	fprintf(stdout, "Check if reboot is needed, version 0.2.3b\n");
+	fprintf(stdout, "Check if reboot is needed, version 0.2.5b\n");
 	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
 };
 
@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
 		usage(argv[0]);
 		goto Exit;
 	}
-	status = is_reboot_needed_ex(&status, &files);
+	is_reboot_needed_ex(&status, &files);
 	if (!_q) {
 		if (!_n) logo();
 		if (_s) {

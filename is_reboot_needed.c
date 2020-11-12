@@ -39,9 +39,9 @@ const TCHAR * __regkey_reboot_netlogon = _T("SYSTEM\\CurrentControlSet\\Services
 const TCHAR * __regparam_reboot_netlogon1 = _T("JoinDomain");
 const TCHAR * __regparam_reboot_netlogon2 = _T("AvoidSpnSet");
 
-// !!!
-// HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName &&
-// HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName is different
+const TCHAR * __regkey_computer1 = _T("SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ActiveComputerName");
+const TCHAR * __regkey_computer2 = _T("SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName");
+const TCHAR * __regparam_computer = _T("ComputerName");
 
 // Reboot pending
 const TCHAR * __regkey_reboot_pending = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending");
@@ -55,13 +55,14 @@ const TCHAR * __regparam_rename_pending2 = _T("PendingFileRenameOperations2");
 const TCHAR * __regkey_dvd_reboot_signal = _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce");
 const TCHAR * __regparam_dvd_reboot_signal = _T("DVDRebootSignal");
 
+#define is_app64 (sizeof(void *) == 8)
+
 #if defined(_WIN64) || defined(WIN64) || defined(__x86_64__)
-#define is_win64() TRUE
+#define is_wow64() FALSE
 #else
 typedef BOOL(WINAPI *fn_IsWow64Process)(HANDLE, PBOOL);
 
-__declspec(noinline)
-static int __cdecl is_win64() {
+static int __cdecl is_wow64() {
 	fn_IsWow64Process isWow64Process;
 	int result;
 	HMODULE hModule = GetModuleHandle(_T("kernel32.dll"));
@@ -71,7 +72,15 @@ static int __cdecl is_win64() {
 	}
 	return 0;
 }
-#endif
+#endif // defined(_WIN64) || defined(WIN64) || defined(__x86_64__)
+
+static int __cdecl is_win64() {
+#if defined(_WIN64) || defined(WIN64) || defined(__x86_64__)
+	return TRUE;
+#else
+	return is_wow64() || is_app64;
+#endif // defined(_WIN64) || defined(WIN64) || defined(__x86_64__)
+}
 
 __declspec(noinline)
 static int __cdecl check_reg_key(const TCHAR * key) {
@@ -79,27 +88,30 @@ static int __cdecl check_reg_key(const TCHAR * key) {
 	RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_READ | (is_win64() ? KEY_WOW64_64KEY : 0), &hKey);
 	if (hKey) {
 		RegCloseKey(hKey);
-		return TRUE;
+		return 1;
 	}
-	return FALSE;
+	return 0;
+}
+
+__declspec(noinline)
+static DWORD __cdecl reg_read_value(const TCHAR * key, const TCHAR * param, LPBYTE * value) {
+	HKEY hKey = NULL;
+	DWORD dwSize = 0, dwType = 0;
+	if(SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &hKey))) {
+		if(SUCCEEDED(RegQueryValueEx(hKey, param, NULL, &dwType, NULL, &dwSize))) {
+			if(value && dwSize) {
+				*value = MemAlloc(dwSize);
+				if (*value) RegQueryValueEx(hKey, param, NULL, &dwType, *value, &dwSize);
+			}
+			RegCloseKey(hKey);
+		}
+	}
+	return dwType;
 }
 
 __declspec(noinline)
 static int __cdecl check_reg_param(const TCHAR * key, const TCHAR * param, LPBYTE * value) {
-	HKEY hKey = NULL;
-	DWORD dwType = 0;
-	RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &hKey);
-	if (hKey) {
-		DWORD dwSize = 0;
-		if(SUCCEEDED(RegQueryValueEx(hKey, param, NULL, &dwType, NULL, &dwSize))) {
-			if(value && dwSize) {
-				*value = MemAlloc(dwSize);
-				if(*value) RegQueryValueEx(hKey, param, NULL, &dwType, *value, &dwSize);
-			}
-		}
-		RegCloseKey(hKey);
-	}
-	return (dwType == REG_MULTI_SZ);
+	return reg_read_value(key, param, value);
 }
 
 __declspec(noinline)
@@ -109,7 +121,8 @@ int __cdecl is_reboot_needed(int * status) {
 
 __declspec(noinline)
 int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files) {
-	int i, *dummy = status ? status : &i;
+	TCHAR * comp1, * comp2;
+	int b, i, *dummy = status ? status : &i;
 	*dummy = REBOOT_STATUS_CLEAN;
 
 	if (
@@ -120,7 +133,13 @@ int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files) {
 		check_reg_param(__regkey_reboot_netlogon, __regparam_reboot_netlogon2, NULL)
 	) *dummy |= REBOOT_STATUS_REBOOT_REQUIRED;
 
+	reg_read_value(__regkey_computer1, __regparam_computer, (LPBYTE *)&comp1);
+	reg_read_value(__regkey_computer2, __regparam_computer, (LPBYTE *)&comp2);
+	b = (_tcslen(comp1) == _tcslen(comp2));
+	if (b) b = !_tcscmp(comp1, comp2);
+
 	if (
+		!b ||
 		check_reg_key(__regkey_reboot_pending) ||
 		check_reg_key(__regkey_reboot_packages_pending) ||
 		check_reg_param(__regkey_dvd_reboot_signal, __regparam_dvd_reboot_signal, NULL)
