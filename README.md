@@ -23,7 +23,7 @@ Set of these flags returns through the passed pointer to an `int` variable as th
 ### Usage
 
 ```
-is_reboot_needed \[options\]
+is_reboot_needed [options]
 
     `-a`      Combination of `-s`, `-d` and `-f` options.
     `-s`      Show status information. This is default option.
