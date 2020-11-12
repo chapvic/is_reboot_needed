@@ -25,12 +25,12 @@ Set of these flags returns through the passed pointer to an `int` variable as th
 ```
 is_reboot_needed [options]
 
-    `-a`      Combination of `-s`, `-d` and `-f` options.
-    `-s`      Show status information. This is default option.
-    `-d`      List driver updates, if present.
-    `-f`      List update pending files.
-    `-n`      Suppress logo.
-    `-q`      Suppress all messages.
+    -a      Combination of '-s', '-d' and '-f' options.
+    -s      Show status information. This is default option.
+    -d      List driver updates, if present.
+    -f      List update pending files.
+    -n      Suppress logo.
+    -q      Suppress all messages.
 ```
 
 ### Compile with GCC
