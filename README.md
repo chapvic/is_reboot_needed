@@ -1,6 +1,6 @@
 # Checks if you need to restart Windows
 
-Version: 0.2.5b
+Version: 0.2.7
 
 This utility returns a set of reboot event codes:
 - Rename pending (1)
@@ -31,8 +31,11 @@ is_reboot_needed [options]
     -f      List update pending files.
     -n      Suppress logo.
     -q      Suppress all messages.
+    -r      Automatic reboot if needed with no messages.
 ```
 
+Warning: If you're use `-r` option and `is reboot needed` is `TRUE`, then system will be restarted immediately.
+                                                       
 ### Compile with GCC
 ```
 gcc -O2 -Wall -s -static -ladvapi32 -o is_reboot_needed.exe is_reboot_needed.c main.c

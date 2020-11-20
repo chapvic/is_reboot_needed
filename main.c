@@ -28,9 +28,14 @@ SOFTWARE.
 #endif
 
 #include "is_reboot_needed.h"
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
+#ifndef __GNUC__
+#pragma comment(lib, "advapi32")
+#endif
 
 #undef _tfprintf
 
@@ -47,7 +52,7 @@ static char * __cdecl basename(char * path) {
 }
 
 static void __cdecl logo(void) {
-	fprintf(stdout, "Check if reboot is needed, version 0.2.5b\n");
+	fprintf(stdout, "Is reboot needed, version 0.2.7\n");
 	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
 };
 
@@ -62,6 +67,7 @@ static void __cdecl usage(char *cmd) {
 	fprintf(stdout, "    -f      list update pending files\n");
 	fprintf(stdout, "    -n      suppress logo\n");
 	fprintf(stdout, "    -q      don't show any messages (quiet mode)\n");
+	fprintf(stdout, "    -r      automatic reboot if needed with no messages\n");
 	exit(0);
 }
 
@@ -177,9 +183,13 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 
 int main(int argc, char* argv[]) {
 	LPBYTE files = NULL;
-	int status = 0, argn = 0;
-	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0;
+	int needed = 0, status = 0, argn = 0;
+	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0, _r = 0;
 	char state[100] = {0};
+	char error[256] = {0};
+	HANDLE hToken;
+	TOKEN_PRIVILEGES * NewState = NULL;
+
 	if (argc > 1) {
 		while (++argn < argc) {
 			if (!_stricmp(argv[argn], "-h")) _h = 1;
@@ -189,6 +199,7 @@ int main(int argc, char* argv[]) {
 			else if (!_stricmp(argv[argn], "-f")) _f = 1;
 			else if (!_stricmp(argv[argn], "-n")) _n = 1;
 			else if (!_stricmp(argv[argn], "-q")) _q = 1;
+			else if (!_stricmp(argv[argn], "-r")) { _r = 1; _q = 1; }
 			else _h = 1;
 		}
 	}
@@ -196,7 +207,7 @@ int main(int argc, char* argv[]) {
 		usage(argv[0]);
 		goto Exit;
 	}
-	is_reboot_needed_ex(&status, &files);
+	needed = is_reboot_needed_ex(&status, &files);
 	if (!_q) {
 		if (!_n) logo();
 		if (_s) {
@@ -227,6 +238,21 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
+	if (_r && needed) {
+		OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
+		NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
+		NewState->PrivilegeCount = 1;
+		if(!LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &NewState->Privileges[0].Luid)) goto Error;
+		NewState->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+		if(!AdjustTokenPrivileges(hToken, FALSE, NewState, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) goto Error;
+		CloseHandle(hToken);
+		if(InitiateSystemShutdown(NULL, _T("Reboot"), 0, TRUE, TRUE)) goto Exit;
+Error:
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+			MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
+		fprintf(stdout, "Reboot error: %s\n", error);
+	}
 Exit:
+	MemFree(NewState);
 	return status;
 }
