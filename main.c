@@ -29,6 +29,7 @@ SOFTWARE.
 
 #include "is_reboot_needed.h"
 #include <windows.h>
+#include <tlhelp32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -37,37 +38,30 @@ SOFTWARE.
 #pragma comment(lib, "advapi32")
 #endif
 
-#undef _tfprintf
-
-#if defined(_UNICODE) || defined(UNICODE)
-#define _tfprintf fwprintf
-#else
-#define _tfprintf fprintf
-#endif
-
-static char * __cdecl basename(char * path) {
-    char* p = strchr(path, 0);
-    while (p > path && !(p[-1] == '/' || p[-1] == '\\')) p--;
+static TCHAR * __cdecl basename(TCHAR * path) {
+    TCHAR * p = _tcschr(path, 0);
+    while (p > path && !(p[-1] == _T('/') || p[-1] == _T('\\'))) p--;
     return p;
 }
 
 static void __cdecl logo(void) {
-	fprintf(stdout, "Is reboot needed, version 0.2.7\n");
-	fprintf(stdout, "Copyright (c) 2019-2020, FoxTeam\n\n");
+	_ftprintf(stdout, _T("Is reboot needed, version 0.2.9\n"));
+	_ftprintf(stdout, _T("Copyright (c) 2019-2020, FoxTeam\n\n"));
 };
 
 __declspec(noinline)
-static void __cdecl usage(char *cmd) {
+static void __cdecl usage(TCHAR *cmd) {
 	logo();
-	fprintf(stdout, "Usage: %s [options]\n", basename(cmd));
-	fprintf(stdout, "    -h      this help\n");
-	fprintf(stdout, "    -a      combination of -s, -d, -f\n");
-	fprintf(stdout, "    -s      show status information (default)\n");
-	fprintf(stdout, "    -d      list driver updates\n");
-	fprintf(stdout, "    -f      list update pending files\n");
-	fprintf(stdout, "    -n      suppress logo\n");
-	fprintf(stdout, "    -q      don't show any messages (quiet mode)\n");
-	fprintf(stdout, "    -r      automatic reboot if needed with no messages\n");
+	_ftprintf(stdout, _T("Usage: %s [options]\n"), basename(cmd));
+	_ftprintf(stdout, _T("    -h      this help\n"));
+	_ftprintf(stdout, _T("    -a      combination of -s, -d, -f\n"));
+	_ftprintf(stdout, _T("    -s      show status information (default)\n"));
+	_ftprintf(stdout, _T("    -d      list driver updates\n"));
+	_ftprintf(stdout, _T("    -f      list update pending files\n"));
+	_ftprintf(stdout, _T("    -n      suppress logo\n"));
+	_ftprintf(stdout, _T("    -q      don't show any messages (quiet mode)\n"));
+	_ftprintf(stdout, _T("    -r      automatic reboot if needed with no messages\n"));
+	_ftprintf(stdout, _T("    -i      reboot if notification is active (Windows 10)\n"));
 	exit(0);
 }
 
@@ -79,7 +73,7 @@ int __cdecl pending_files(LPBYTE * _files, int _print) {
 	p = (TCHAR *)*_files;
 	do {
 		pp = _tcschr(p, 0);
-		if (_print) _tfprintf(stdout, _T("  (%d) %s\n"), ++cnt, p+4);
+		if (_print) _ftprintf(stdout, _T("  (%d) %s\n"), ++cnt, p+4);
 		else ++cnt;
 	} while(*(p = pp + 2));
 Exit:
@@ -93,7 +87,7 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 	int retval = 0;
 	TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
 //	DWORD    cbName;                   // size of name string 
-	TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+	TCHAR    achClass[MAX_PATH] = _T("");  // buffer for class name 
 	DWORD    cchClassName = MAX_PATH;  // size of class string 
 	DWORD    cSubKeys=0;               // number of subkeys 
 	DWORD    cbMaxSubKey;              // longest subkey size 
@@ -127,13 +121,13 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 	retval = cValues;
 
 	// Display updates count
-        fprintf(stdout, "Driver updates   : %ld\n", cValues);
+        _ftprintf(stdout, _T("Driver updates   : %ld\n"), cValues);
 
     if (cValues) {
 	// Get registry timestamp
 	SYSTEMTIME st;
 	FileTimeToSystemTime(&ftLastWriteTime, &st);
-        fprintf(stdout, "Last update time : %02d.%02d.%04d %02d:%02d:%02d\n",
+        _ftprintf(stdout, _T("Last update time : %02d.%02d.%04d %02d:%02d:%02d\n"),
 		st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
 	
 	if (!detailed) return retval;
@@ -142,38 +136,38 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
             achValue[0] = '\0'; 
             retCode = RegEnumValue(hKey, i, achValue, &cchValue, NULL, NULL, NULL, NULL);
             if (retCode == ERROR_SUCCESS) { 
-                _tprintf(TEXT("  (%ld) "), i+1);
+                _tprintf(_T("  (%ld) "), i+1);
 
 		HKEY drvKey, clsKey;
-		_tcscpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Enum\\"));
+		_tcscpy(achKey, _T("SYSTEM\\CurrentControlSet\\Enum\\"));
 		_tcscat(achKey, achValue);
 		if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &drvKey))) {
 			achValue[0] = '\0';
 			cchValue = MAX_VALUE_NAME;
-			if (SUCCEEDED(RegQueryValueEx(drvKey, TEXT("Driver"), NULL, NULL, (LPBYTE)&achValue, &cchValue)) && achValue[0]) {
+			if (SUCCEEDED(RegQueryValueEx(drvKey, _T("Driver"), NULL, NULL, (LPBYTE)&achValue, &cchValue)) && achValue[0]) {
 				// Load driver information
-				_tcscpy(achKey, TEXT("SYSTEM\\CurrentControlSet\\Control\\Class\\"));
+				_tcscpy(achKey, _T("SYSTEM\\CurrentControlSet\\Control\\Class\\"));
 				_tcscat(achKey, achValue);
 				if (SUCCEEDED(RegOpenKeyEx(HKEY_LOCAL_MACHINE, achKey, 0, KEY_READ, &clsKey))) {
 					// Get provider name
 					achValue[0] = '\0';
 					cchValue = MAX_VALUE_NAME;
-					RegQueryValueEx(clsKey, TEXT("ProviderName"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
-					_tfprintf(stdout, TEXT(" %s"), achValue);
+					RegQueryValueEx(clsKey, _T("ProviderName"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_ftprintf(stdout, _T(" %s"), achValue);
 					// Get driver decription
 					achValue[0] = '\0';
 					cchValue = MAX_VALUE_NAME;
-					RegQueryValueEx(clsKey, TEXT("DriverDesc"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
-					_tfprintf(stdout, TEXT(" - %s"), achValue);
+					RegQueryValueEx(clsKey, _T("DriverDesc"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_ftprintf(stdout, _T(" - %s"), achValue);
 					// Get driver version
 					achValue[0] = '\0';
 					cchValue = MAX_VALUE_NAME;
-					RegQueryValueEx(clsKey, TEXT("DriverVersion"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
-					_tfprintf(stdout, TEXT(" - %s\n"), achValue);
+					RegQueryValueEx(clsKey, _T("DriverVersion"), NULL, NULL, (LPBYTE)&achValue, &cchValue);
+					_ftprintf(stdout, _T(" - %s\n"), achValue);
 				}
 			}
 			RegCloseKey(drvKey);
-			_tfprintf(stdout, TEXT("---\n"));
+			_ftprintf(stdout, _T("---\n"));
 		}
             } 
         }
@@ -181,25 +175,28 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 	return retval;
 }
 
-int main(int argc, char* argv[]) {
+int _tmain(int argc, TCHAR * argv[]) {
 	LPBYTE files = NULL;
 	int needed = 0, status = 0, argn = 0;
-	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0, _r = 0;
-	char state[100] = {0};
-	char error[256] = {0};
-	HANDLE hToken;
+	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0, _r = 0, _i = 0;
+	TCHAR state[100] = {0};
+	TCHAR error[256] = {0};
+	HANDLE hToken, hSnap;
+	BOOL notifyed = FALSE;
 	TOKEN_PRIVILEGES * NewState = NULL;
+	PROCESSENTRY32 pe32;
 
 	if (argc > 1) {
 		while (++argn < argc) {
-			if (!_stricmp(argv[argn], "-h")) _h = 1;
-			else if (!_stricmp(argv[argn], "-a")) { _s = 1; _d = 1, _f = 1; }
-			else if (!_stricmp(argv[argn], "-s")) _s = 1;
-			else if (!_stricmp(argv[argn], "-d")) _d = 1;
-			else if (!_stricmp(argv[argn], "-f")) _f = 1;
-			else if (!_stricmp(argv[argn], "-n")) _n = 1;
-			else if (!_stricmp(argv[argn], "-q")) _q = 1;
-			else if (!_stricmp(argv[argn], "-r")) { _r = 1; _q = 1; }
+			if (!_tcsicmp(argv[argn], _T("-h"))) _h = 1;
+			else if (!_tcsicmp(argv[argn], _T("-a"))) { _s = 1; _d = 1, _f = 1; }
+			else if (!_tcsicmp(argv[argn], _T("-s"))) _s = 1;
+			else if (!_tcsicmp(argv[argn], _T("-d"))) _d = 1;
+			else if (!_tcsicmp(argv[argn], _T("-f"))) _f = 1;
+			else if (!_tcsicmp(argv[argn], _T("-n"))) _n = 1;
+			else if (!_tcsicmp(argv[argn], _T("-q"))) _q = 1;
+			else if (!_tcsicmp(argv[argn], _T("-r"))) { _r = 1; _q = 1; }
+			else if (!_tcsicmp(argv[argn], _T("-i"))) { _i = 1; _r = 1; }
 			else _h = 1;
 		}
 	}
@@ -211,18 +208,18 @@ int main(int argc, char* argv[]) {
 	if (!_q) {
 		if (!_n) logo();
 		if (_s) {
-			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) strcat(state, ", RENAME_PENDING");
-			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) strcat(state, ", REBOOT_PENDING");
-			if (_bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED)) strcat(state, ", REBOOT_REQUIRED");
-			if (!status) strcat(state, ", CLEAN");
-			fprintf(stdout, "Is reboot needed : %s\n", 
-				(status > REBOOT_STATUS_RENAME_PENDING) ? "yes" :
-				(status > 0) ? "optional" : "no");
-			fprintf(stdout, "Status           : %s\n", &state[2]);
+			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) _tcscat(state, _T(", RENAME_PENDING"));
+			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) _tcscat(state, _T(", REBOOT_PENDING"));
+			if (_bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED)) _tcscat(state, _T(", REBOOT_REQUIRED"));
+			if (!status) _tcscat(state, _T(", CLEAN"));
+			_ftprintf(stdout, _T("Is reboot needed : %s\n"), 
+				(status > REBOOT_STATUS_RENAME_PENDING) ? _T("yes") :
+				(status > 0) ? _T("optional") : _T("no"));
+			_ftprintf(stdout, _T("Status           : %s\n"), &state[2]);
 
 			if (status > REBOOT_STATUS_RENAME_PENDING) {
 				HKEY hKey;
-				if (SUCCEEDED(RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("System\\CurrentControlSet\\Control\\NotifyDeviceReboot"), 0, KEY_READ, &hKey))) {
+				if (SUCCEEDED(RegOpenKeyEx(HKEY_CURRENT_USER, _T("System\\CurrentControlSet\\Control\\NotifyDeviceReboot"), 0, KEY_READ, &hKey))) {
 					check_drivers(hKey, _d);
 					RegCloseKey(hKey);
 				}
@@ -238,19 +235,38 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
+
+	//	
+	// Checks Windows 10 updates completed
+	//
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+	hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (Process32First(hSnap, &pe32)) {
+		while (Process32Next(hSnap, &pe32)) {
+			if (!_tcsicmp(pe32.szExeFile, _T("MusNotifyIcon.exe"))) {
+				notifyed = TRUE;
+				break;
+			}
+		}
+	}
+
 	if (_r && needed) {
-		OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
-		NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
-		NewState->PrivilegeCount = 1;
-		if(!LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &NewState->Privileges[0].Luid)) goto Error;
-		NewState->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-		if(!AdjustTokenPrivileges(hToken, FALSE, NewState, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) goto Error;
-		CloseHandle(hToken);
-		if(InitiateSystemShutdown(NULL, _T("Reboot"), 0, TRUE, TRUE)) goto Exit;
+		if (!_i || notifyed) {
+			OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
+			NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
+			NewState->PrivilegeCount = 1;
+			if(!LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &NewState->Privileges[0].Luid)) goto Error;
+			NewState->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+			if(!AdjustTokenPrivileges(hToken, FALSE, NewState, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) goto Error;
+			CloseHandle(hToken);
+			if(InitiateSystemShutdown(NULL, _T("Reboot"), 0, TRUE, TRUE)) goto Exit;
 Error:
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-			MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
-		fprintf(stdout, "Reboot error: %s\n", error);
+			FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+				MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
+			_ftprintf(stdout, _T("Reboot error: %s\n"), error);
+		} else {
+			if (!_q) _ftprintf(stdout, _T("Waiting while update is running\n"));
+		}
 	}
 Exit:
 	MemFree(NewState);

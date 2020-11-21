@@ -1,6 +1,6 @@
 # Checks if you need to restart Windows
 
-Version: 0.2.7
+Version: 0.2.9
 
 This utility returns a set of reboot event codes:
 - Rename pending (1)
@@ -32,9 +32,11 @@ is_reboot_needed [options]
     -n      Suppress logo.
     -q      Suppress all messages.
     -r      Automatic reboot if needed with no messages.
+    -i      reboot if notification is active (Windows 10).
 ```
 
 Warning: If you're use `-r` option and `is reboot needed` is `TRUE`, then system will be restarted immediately.
+Option `-i` makes reboot when process `MusNotifyIcon.exe` is active only (for Windows 10)
                                                        
 ### Compile with GCC
 ```
