@@ -6,6 +6,7 @@ This utility returns a set of reboot event codes:
 - Rename pending (1)
 - Reboot pending (2)
 - Reboot required (4)
+- Notification is active (8)
 
 Status codes of these events are defined in `is_reboot_needed.h`:
 
