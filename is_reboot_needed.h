@@ -49,17 +49,19 @@ SOFTWARE.
 #pragma warning(disable: 5045)
 #endif
 
-#include <tchar.h>
 #include <windows.h>
+#include <tlhelp32.h>
+#include <tchar.h>
 
 #ifdef _MSC_VER
 #pragma comment(lib, "advapi32")
 #endif
 
-#define REBOOT_STATUS_CLEAN            0UL
-#define REBOOT_STATUS_RENAME_PENDING   1UL
-#define REBOOT_STATUS_REBOOT_PENDING   2UL
-#define REBOOT_STATUS_REBOOT_REQUIRED  4UL
+#define REBOOT_STATUS_CLEAN                0UL
+#define REBOOT_STATUS_RENAME_PENDING       1UL
+#define REBOOT_STATUS_REBOOT_PENDING       2UL
+#define REBOOT_STATUS_REBOOT_REQUIRED      4UL
+#define REBOOT_STATUS_NOTIFICATION_ACTIVE  8UL
 
 #ifndef MemAlloc
 #define MemAlloc(s) HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,(s))

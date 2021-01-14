@@ -121,6 +121,8 @@ int __cdecl is_reboot_needed(int * status) {
 
 __declspec(noinline)
 int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files) {
+	HANDLE hSnap;
+	PROCESSENTRY32 pe32;
 	TCHAR * comp1, * comp2;
 	int b, i, *dummy = status ? status : &i;
 	*dummy = REBOOT_STATUS_CLEAN;
@@ -149,6 +151,18 @@ int __cdecl is_reboot_needed_ex(int * status, LPBYTE * files) {
 		check_reg_param(__regkey_rename_pending, __regparam_rename_pending, files) ||
 		check_reg_param(__regkey_rename_pending, __regparam_rename_pending2, NULL)
 	) *dummy |= REBOOT_STATUS_RENAME_PENDING;
+
+	// find a reboot notification process (for Windows 10)
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+	hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (Process32First(hSnap, &pe32)) {
+		while (Process32Next(hSnap, &pe32)) {
+			if (!_tcsicmp(pe32.szExeFile, _T("MusNotifyIcon.exe"))) {
+				*dummy |= REBOOT_STATUS_NOTIFICATION_ACTIVE;
+				break;
+			}
+		}
+	}
 
 	return *dummy > REBOOT_STATUS_RENAME_PENDING;
 }

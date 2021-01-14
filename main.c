@@ -28,8 +28,6 @@ SOFTWARE.
 #endif
 
 #include "is_reboot_needed.h"
-#include <windows.h>
-#include <tlhelp32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -45,8 +43,8 @@ static TCHAR * __cdecl basename(TCHAR * path) {
 }
 
 static void __cdecl logo(void) {
-	_ftprintf(stdout, _T("Is reboot needed, version 0.2.9\n"));
-	_ftprintf(stdout, _T("Copyright (c) 2019-2020, FoxTeam\n\n"));
+	_ftprintf(stdout, _T("Is reboot needed, version 0.3.0\n"));
+	_ftprintf(stdout, _T("Copyright (c) 2019-2021, FoxTeam\n\n"));
 };
 
 __declspec(noinline)
@@ -61,7 +59,8 @@ static void __cdecl usage(TCHAR *cmd) {
 	_ftprintf(stdout, _T("    -n      suppress logo\n"));
 	_ftprintf(stdout, _T("    -q      don't show any messages (quiet mode)\n"));
 	_ftprintf(stdout, _T("    -r      automatic reboot if needed with no messages\n"));
-	_ftprintf(stdout, _T("    -i      reboot if notification is active (Windows 10)\n"));
+	_ftprintf(stdout, _T("    -i      start reboot if notification is active (Windows 10)\n"));
+	_ftprintf(stdout, _T("            (implies `-r` option)\n"));
 	exit(0);
 }
 
@@ -176,15 +175,14 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 }
 
 int _tmain(int argc, TCHAR * argv[]) {
+	HANDLE hToken;
+	TOKEN_PRIVILEGES * NewState = NULL;
+	BOOL notification = FALSE;
 	LPBYTE files = NULL;
 	int needed = 0, status = 0, argn = 0;
 	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0, _r = 0, _i = 0;
 	TCHAR state[100] = {0};
 	TCHAR error[256] = {0};
-	HANDLE hToken, hSnap;
-	BOOL notifyed = FALSE;
-	TOKEN_PRIVILEGES * NewState = NULL;
-	PROCESSENTRY32 pe32;
 
 	if (argc > 1) {
 		while (++argn < argc) {
@@ -204,13 +202,25 @@ int _tmain(int argc, TCHAR * argv[]) {
 		usage(argv[0]);
 		goto Exit;
 	}
+
+	//	
+	// Do check for reboot is needed
+	//
 	needed = is_reboot_needed_ex(&status, &files);
+	//	
+	// Find a reboot notification process (when updates are completed)
+	//
+
 	if (!_q) {
 		if (!_n) logo();
 		if (_s) {
 			if (_bitcheck(status,REBOOT_STATUS_RENAME_PENDING)) _tcscat(state, _T(", RENAME_PENDING"));
 			if (_bitcheck(status,REBOOT_STATUS_REBOOT_PENDING)) _tcscat(state, _T(", REBOOT_PENDING"));
 			if (_bitcheck(status,REBOOT_STATUS_REBOOT_REQUIRED)) _tcscat(state, _T(", REBOOT_REQUIRED"));
+			if (_bitcheck(status,REBOOT_STATUS_NOTIFICATION_ACTIVE)) {
+				_tcscat(state, _T(", NOTIFICATION_ACTIVE"));
+				notification = TRUE;
+			}
 			if (!status) _tcscat(state, _T(", CLEAN"));
 			_ftprintf(stdout, _T("Is reboot needed : %s\n"), 
 				(status > REBOOT_STATUS_RENAME_PENDING) ? _T("yes") :
@@ -234,24 +244,14 @@ int _tmain(int argc, TCHAR * argv[]) {
 				MemFree(files);
 			}
 		}
-	}
-
-	//	
-	// Checks Windows 10 updates completed
-	//
-	pe32.dwSize = sizeof(PROCESSENTRY32);
-	hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (Process32First(hSnap, &pe32)) {
-		while (Process32Next(hSnap, &pe32)) {
-			if (!_tcsicmp(pe32.szExeFile, _T("MusNotifyIcon.exe"))) {
-				notifyed = TRUE;
-				break;
-			}
+		if (notification) {
+			_ftprintf(stdout, _T("\nWARNING: The Windows Update notification was detected!\n"));
+			_ftprintf(stdout, _T("         Restart your device to install updates.\n"));
 		}
 	}
 
 	if (_r && needed) {
-		if (!_i || notifyed) {
+		if (!_i || notification) {
 			OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
 			NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
 			NewState->PrivilegeCount = 1;
