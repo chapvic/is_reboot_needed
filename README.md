@@ -34,14 +34,16 @@ is_reboot_needed [options]
     -q      Suppress all messages.
     -r      Automatic reboot if needed with no messages.
     -i      Start reboot if notification is active only (Windows 10).
-            (implies `-r` option)
+            (implies '-r' option)
 ```
 
 Warning: If you're use `-r` option and `is reboot needed` is `TRUE`, then system will be restarted immediately.
 Option `-i` makes reboot if process `MusNotifyIcon.exe` is active (for Windows 10)
 
-Note: Since version 0.3.0 a special warning will be displayed when detects a reboot notification. The `REBOOT_STATUS_NOTIFICATION_ACTIVE` (8) flag has been added for the return code.
-This is only for Windows 10!
+```
+Note: Since version 0.3.0 a special warning will be displayed when a reboot notification detected.
+      The "REBOOT_STATUS_NOTIFICATION_ACTIVE" (8) flag has been added for the return code.
+```
                                                        
 ### Compile with GCC
 ```

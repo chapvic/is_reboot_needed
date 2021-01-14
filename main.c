@@ -194,7 +194,7 @@ int _tmain(int argc, TCHAR * argv[]) {
 			else if (!_tcsicmp(argv[argn], _T("-n"))) _n = 1;
 			else if (!_tcsicmp(argv[argn], _T("-q"))) _q = 1;
 			else if (!_tcsicmp(argv[argn], _T("-r"))) { _r = 1; _q = 1; }
-			else if (!_tcsicmp(argv[argn], _T("-i"))) { _i = 1; _r = 1; }
+			else if (!_tcsicmp(argv[argn], _T("-i"))) { _i = 1; }
 			else _h = 1;
 		}
 	}
@@ -207,9 +207,6 @@ int _tmain(int argc, TCHAR * argv[]) {
 	// Do check for reboot is needed
 	//
 	needed = is_reboot_needed_ex(&status, &files);
-	//	
-	// Find a reboot notification process (when updates are completed)
-	//
 
 	if (!_q) {
 		if (!_n) logo();
@@ -265,7 +262,7 @@ Error:
 				MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
 			_ftprintf(stdout, _T("Reboot error: %s\n"), error);
 		} else {
-			if (!_q) _ftprintf(stdout, _T("Waiting while update is running\n"));
+			if (!_q) _ftprintf(stdout, _T("Waiting while update is running.\n"));
 		}
 	}
 Exit:
