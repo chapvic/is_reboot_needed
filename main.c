@@ -47,6 +47,25 @@ static void __cdecl logo(void) {
 	_ftprintf(stdout, _T("Copyright (c) 2019-2021, FoxTeam\n\n"));
 };
 
+static void __cdecl reboot(void) {
+	TCHAR error[256] = {0};
+	HANDLE hToken;
+	TOKEN_PRIVILEGES * NewState = NULL;
+	OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
+	NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
+	NewState->PrivilegeCount = 1;
+	if (!LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &NewState->Privileges[0].Luid)) goto Error;
+	NewState->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+	if (!AdjustTokenPrivileges(hToken, FALSE, NewState, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) goto Error;
+	CloseHandle(hToken);
+	if (InitiateSystemShutdown(NULL, _T("Reboot"), 0, TRUE, TRUE)) return;
+Error:
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+		MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
+	_ftprintf(stdout, _T("Reboot error: %s\n"), error);
+	MemFree(NewState);
+}
+
 __declspec(noinline)
 static void __cdecl usage(TCHAR *cmd) {
 	logo();
@@ -59,8 +78,8 @@ static void __cdecl usage(TCHAR *cmd) {
 	_ftprintf(stdout, _T("    -n      suppress logo\n"));
 	_ftprintf(stdout, _T("    -q      don't show any messages (quiet mode)\n"));
 	_ftprintf(stdout, _T("    -r      automatic reboot if needed with no messages\n"));
-	_ftprintf(stdout, _T("    -i      start reboot if notification is active (Windows 10)\n"));
-	_ftprintf(stdout, _T("            (implies `-r` option)\n"));
+	_ftprintf(stdout, _T("    -i      allow reboot if notification is active (for Windows 10)\n"));
+	_ftprintf(stdout, _T("            (used with '-r' option)\n"));
 	exit(0);
 }
 
@@ -175,14 +194,11 @@ int __cdecl check_drivers(HKEY hKey, int detailed) {
 }
 
 int _tmain(int argc, TCHAR * argv[]) {
-	HANDLE hToken;
-	TOKEN_PRIVILEGES * NewState = NULL;
 	BOOL notification = FALSE;
 	LPBYTE files = NULL;
 	int needed = 0, status = 0, argn = 0;
 	int _h = 0, _s = 1, _d = 0, _f = 0, _n = 0, _q = 0, _r = 0, _i = 0;
 	TCHAR state[100] = {0};
-	TCHAR error[256] = {0};
 
 	if (argc > 1) {
 		while (++argn < argc) {
@@ -193,8 +209,8 @@ int _tmain(int argc, TCHAR * argv[]) {
 			else if (!_tcsicmp(argv[argn], _T("-f"))) _f = 1;
 			else if (!_tcsicmp(argv[argn], _T("-n"))) _n = 1;
 			else if (!_tcsicmp(argv[argn], _T("-q"))) _q = 1;
-			else if (!_tcsicmp(argv[argn], _T("-r"))) { _r = 1; _q = 1; }
-			else if (!_tcsicmp(argv[argn], _T("-i"))) { _i = 1; }
+			else if (!_tcsicmp(argv[argn], _T("-r"))) _r = 1;
+			else if (!_tcsicmp(argv[argn], _T("-i"))) _i = 1;
 			else _h = 1;
 		}
 	}
@@ -241,31 +257,31 @@ int _tmain(int argc, TCHAR * argv[]) {
 				MemFree(files);
 			}
 		}
-		if (notification) {
-			_ftprintf(stdout, _T("\nWARNING: The Windows Update notification was detected!\n"));
-			_ftprintf(stdout, _T("         Restart your device to install updates.\n"));
-		}
 	}
 
-	if (_r && needed) {
-		if (!_i || notification) {
-			OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken);
-			NewState = (TOKEN_PRIVILEGES *)MemAlloc(sizeof(TOKEN_PRIVILEGES) + sizeof(LUID_AND_ATTRIBUTES));
-			NewState->PrivilegeCount = 1;
-			if(!LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &NewState->Privileges[0].Luid)) goto Error;
-			NewState->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-			if(!AdjustTokenPrivileges(hToken, FALSE, NewState, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) goto Error;
-			CloseHandle(hToken);
-			if(InitiateSystemShutdown(NULL, _T("Reboot"), 0, TRUE, TRUE)) goto Exit;
-Error:
-			FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), error, 255, NULL);
-			_ftprintf(stdout, _T("Reboot error: %s\n"), error);
-		} else {
-			if (!_q) _ftprintf(stdout, _T("Waiting while update is running.\n"));
+	// Show warning only if reboot is not acquiring
+	if (notification && !_q && !_r) {
+		_ftprintf(stdout, _T("\nWARNING: The Windows Update notification detected!\n"));
+		_ftprintf(stdout, _T("         Restart your device to install updates.\n"));
+	}
+
+	if (_i && !_r) {
+		if (!_q) _ftprintf(stdout, _T("\nError: option '-i' without '-r'!\n"));
+		goto Exit;
+	}
+
+	// If reboot acquired
+	if (_r) {
+		if (!needed) {
+			if (!_q) _ftprintf(stdout, _T("\nWARNING: Reboot is not needed!\n"));
+		}
+		else if (_i && !notification) {
+			if (!_q) _ftprintf(stdout, _T("\nINFO: Waiting while update is running.\n"));
+		}
+		else {
+			reboot();
 		}
 	}
 Exit:
-	MemFree(NewState);
 	return status;
 }
