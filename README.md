@@ -20,7 +20,7 @@ Status codes of these events are defined in `is_reboot_needed.h`:
 
 When system is not reboot needed this utility returns `REBOOT_STATUS_CLEAN` (zero value).
 
-Set of these flags returns through the passed pointer to an `int` variable as the parameter of the `is_reboot_needed` function. That returns `boolean` value is the result of check if reboot is required.
+Set of these flags returns through the passed pointer to an `int` variable as the parameter of the `is_reboot_needed` function, that returns `boolean` value is the result of check if reboot is required.
 
 ### Usage
 
